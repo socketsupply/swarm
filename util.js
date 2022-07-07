@@ -4,8 +4,9 @@ function isIp (s) {
   return 'string' === typeof s && s.split('.').every(e => +e === +e && 0xff)
 }
 
-function createId() {
-  return crypto.randomBytes(32).toString('hex')
+function createId(seed) {
+  return crypto.createHash('sha256').update(seed).digest('hex')
+  //return crypto.randomBytes(32).toString('hex')
 }
 
 function isPort (p) {
