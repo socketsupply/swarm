@@ -95,7 +95,7 @@ module.exports = function (port, seeds, id) {
         pongs[msg.id] = msg.addr
 
         if(!peers[msg.id]) {
-          peers[msg.id] = {id: msg.id, addr:addr, nat: msg.nat || 'unknown', direct: true, recv: Date.now()}
+          peers[msg.id] = {id: msg.id, ...addr, nat: msg.nat || 'unknown', direct: true, recv: Date.now()}
           announce = true
         }
         else {
@@ -124,14 +124,14 @@ module.exports = function (port, seeds, id) {
           //announce this new peer to other peers
           for(var id2 in peers) {
             if(id2 != msg.id) {
-              _peers.push({id: id2, ...peers[id2].addr, nat: peers[id2].nat})
-              send({type:'peers', peers: [{id: msg.id, ...peers[msg.id].addr, nat: peers[msg.id].nat}]}, peers[id2].addr, port)
+              _peers.push({id: id2, ...peers[id2], nat: peers[id2].nat})
+              send({type:'peers', peers: [{id: msg.id, ...peers[msg.id], nat: peers[msg.id].nat}]}, peers[id2], port)
             }
           }
         
           //send peers list to this new peer
           if(_peers.length) {
-            send({type:'peers', peers: _peers}, peers[msg.id].addr, port)
+            send({type:'peers', peers: _peers}, peers[msg.id], port)
           }
         }
       }
