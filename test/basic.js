@@ -98,32 +98,39 @@ tape('3 servers, 1 peer', function (t) {
 })
 
 tape('3 servers, two seeds, similar to NAT check app', function (t) {
-  var net = new Network()
-  net.add(A, new Node(createPeer(100, [], ids.a)))
-  net.add(B, new Node(createPeer(100, [C+P], ids.b)))
-  net.add(C, new Node(createPeer(100, [], ids.c)))
+  for(var i = 0; i < 30; i++) {
+    var net = new Network()
+    net.add(A, new Node(createPeer(100, [], ids.a)))
+    net.add(B, new Node(createPeer(100, [C+P], ids.b)))
+    net.add(C, new Node(createPeer(100, [], ids.c)))
 
-  net.add(D, new Node(createPeer(100, [A+P, B+P], ids.d)))
+    net.add(D, new Node(createPeer(100, [A+P, B+P], ids.d)))
 
-  net.iterate(-1)
+    net.iterate(-1)
 
-  var nats = {}
+    var nats = {}
 
-  for(var k in net.subnet) {
-    console.log(
-      short(net.subnet[k].data.id),
-      net.subnet[k].data.nat
-    )
-    for(var j in net.subnet[k].data.peers) {
-      var nat = net.subnet[k].data.peers[j].nat
-      nats[nat] = (nats[nat] || 0) + 1
+    for(var k in net.subnet) {
       console.log(
-        short(net.subnet[k].data.id), 
-        short(j),
-        net.subnet[k].data.peers[j].nat
+        short(net.subnet[k].data.id),
+        net.subnet[k].data.nat
       )
+      for(var j in net.subnet[k].data.peers) {
+        var nat = net.subnet[k].data.peers[j].nat
+        nats[nat] = (nats[nat] || 0) + 1
+/*        console.log(
+          short(net.subnet[k].data.id), 
+          short(j),
+          net.subnet[k].data.peers[j].nat
+        )*/
+      }
     }
+
+    t.ok(nats.static >= 9)
+    if(nats.static === 12)
+      break;
   }
 
+  t.deepEqual(nats, {static:12})
   t.end()
 })
