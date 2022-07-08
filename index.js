@@ -50,31 +50,29 @@ module.exports = function (port, seeds, id) {
   if(!id) throw new Error('id must be provided')
   var peers = {}
   var pongs = {}
+  var sent = {}
   var nat = 'unknown'
   var address = null
   return function (send, timer, node) {
-    node.data = {id, peers, pongs, nat}
+    node.data = {id, peers, pongs, nat, sent}
     seeds.forEach(s => {
-      send({type: 'ping', id}, toAddress(s), port)
+      ping(toAddress(s), port)
+//      send({type: 'ping', id}, toAddress(s), port)
     })
 
     //every second, send the peers that we have received messages from
     //within the last 30 seconds
-    /*
-    timer(0, 1024, (ts) => {
-      var id = rand_peer()
-      var announce = {
-        type:'announce',
-        peers: Object.keys(peers).map(id => peers[id]).filter(p => p.recv + 30_000 > ts && p.id != id)
-
-      }
-      send(announce, peers[id], port) 
-   })
-    */
     //XXX also when resume after suspend, send some pings to check if our ip is the same
+    //model this as a peer that changes it's ip address
 
     //on an interval, transmit our peers to some random peer
 
+    function ping (addr, port) {
+      sent[addr.address] = sent[addr.address] || {}
+      sent[addr.address][port] = Date.now()
+      send({type: 'ping', id}, addr, port)
+    }
+  
     //pings seeds
     //announce self
     //periodically emit peers
@@ -86,7 +84,8 @@ module.exports = function (port, seeds, id) {
         //this would happen naturally, if a peer tells other peers about us and they ping
         if(!msg.id) throw new Error('ping requires id')
         if(!peers[msg.id]) { //TODO, double check that we have not sent anything to this peer yet
-          node.data.nat = nat = 'static'
+          if(!(sent[addr.address] && sent[addr.address][addr.port]))
+            node.data.nat = nat = 'static'
         }
 
         send({type: 'pong', id, addr, nat: node.data.nat}, addr, port)
@@ -151,7 +150,7 @@ module.exports = function (port, seeds, id) {
               //also send to easy nat peers because they might actually be static
               if((peer.id !== id) && (/^(static|easy|unknown)$/.exec(peer.nat)) /*peer.nat === 'static' || peer.nat === 'easy' /*|| peer.address == addr.address*/) {
                 peer.send = Date.now()
-                send({type: 'ping', id}, msg.peers[i], port)
+                ping(peer, port)
               }
               //if it's a easy nat, we could ping it and route a ping request via the node that told us about it
             }
