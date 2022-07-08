@@ -20,13 +20,24 @@ function short (id) {
   return id.substring(0, 8)
 }
 
+var ids = {}, id_count = 0
+
+for (var i = 0; i < 1000; i++) {
+  var id = createId('_'+i)
+  if(!ids[id[0]]) {
+    ids[id[0]] = id
+    id_count ++
+  }
+  if(id_count == 16) break;
+}
+
 tape('3 servers, 1 peer', function (t) {
   var net = new Network()
-  net.add(A, new Node(createPeer(100, [], createId(A))))
-  net.add(B, new Node(createPeer(100, [], createId(B))))
-  net.add(C, new Node(createPeer(100, [], createId(C))))
+  net.add(A, new Node(createPeer(100, [], ids.a)))
+  net.add(B, new Node(createPeer(100, [], ids.b)))
+  net.add(C, new Node(createPeer(100, [], ids.c)))
 
-  net.add(D, new Node(createPeer(100, [A+P, B+P, C+P], createId(D))))
+  net.add(D, new Node(createPeer(100, [A+P, B+P, C+P], ids.d)))
 
   net.iterate(-1)
 
@@ -83,5 +94,36 @@ tape('3 servers, 1 peer', function (t) {
   t.equal(net.subnet[D].data.nat, 'easy')
 
   //each peer should have sent 3 pings + 3 pongs + peer messages 1, 2, 3
+  t.end()
+})
+
+tape('3 servers, two seeds, similar to NAT check app', function (t) {
+  var net = new Network()
+  net.add(A, new Node(createPeer(100, [], ids.a)))
+  net.add(B, new Node(createPeer(100, [C+P], ids.b)))
+  net.add(C, new Node(createPeer(100, [], ids.c)))
+
+  net.add(D, new Node(createPeer(100, [A+P, B+P], ids.d)))
+
+  net.iterate(-1)
+
+  var nats = {}
+
+  for(var k in net.subnet) {
+    console.log(
+      short(net.subnet[k].data.id),
+      net.subnet[k].data.nat
+    )
+    for(var j in net.subnet[k].data.peers) {
+      var nat = net.subnet[k].data.peers[j].nat
+      nats[nat] = (nats[nat] || 0) + 1
+      console.log(
+        short(net.subnet[k].data.id), 
+        short(j),
+        net.subnet[k].data.peers[j].nat
+      )
+    }
+  }
+
   t.end()
 })
