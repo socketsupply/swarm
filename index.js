@@ -44,7 +44,10 @@ except randomly resend things if you don't know many peers
 
 */
 
-
+function toPeer(p) {
+  var {id, address, port, nat} = p
+  return {id, address, port, nat}
+}
 
 module.exports = function (port, seeds, id) {
   if(!id) throw new Error('id must be provided')
@@ -57,15 +60,10 @@ module.exports = function (port, seeds, id) {
     node.data = {id, peers, pongs, nat, sent}
     seeds.forEach(s => {
       ping(toAddress(s), port)
-//      send({type: 'ping', id}, toAddress(s), port)
     })
 
-    //every second, send the peers that we have received messages from
-    //within the last 30 seconds
     //XXX also when resume after suspend, send some pings to check if our ip is the same
     //model this as a peer that changes it's ip address
-
-    //on an interval, transmit our peers to some random peer
 
     function ping (addr, port) {
       sent[addr.address] = sent[addr.address] || {}
@@ -122,16 +120,18 @@ module.exports = function (port, seeds, id) {
           //initialize peers list with our own address
           var _peers = [{id, address, port, nat: node.data.nat}]
           //announce this new peer to other peers
+          var peer = peers[msg.id]
           for(var id2 in peers) {
+            var _peer = peers[id2]
             if(id2 != msg.id) {
-              _peers.push({id: id2, ...peers[id2], nat: peers[id2].nat})
-              send({type:'peers', peers: [{id: msg.id, ...peers[msg.id], nat: peers[msg.id].nat}]}, peers[id2], port)
+              _peers.push(toPeer(_peer))
+              send({type:'peers', peers: [toPeer(peer)]}, _peer, port)
             }
           }
         
           //send peers list to this new peer
           if(_peers.length) {
-            send({type:'peers', peers: _peers}, peers[msg.id], port)
+            send({type:'peers', peers: _peers}, peer, port)
           }
         }
       }
