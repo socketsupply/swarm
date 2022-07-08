@@ -82,8 +82,18 @@ module.exports = function (port, seeds, id) {
         //this would happen naturally, if a peer tells other peers about us and they ping
         if(!msg.id) throw new Error('ping requires id')
         if(!peers[msg.id]) { //TODO, double check that we have not sent anything to this peer yet
-          if(!(sent[addr.address] && sent[addr.address][addr.port]))
-            node.data.nat = nat = 'static'
+          if(!(sent[addr.address] && sent[addr.address][addr.port])) {
+            //knowing that we are static depends on receiving a ping from an unknown peer
+            //theirfore it depends on message order, which is unpredictable.
+            //maybe we could make it so that peers wouldn't try to message _every_ peer
+            //if we learn our nat has changed, we should tell everyone
+            if(nat !== 'static') {
+              node.data.nat = nat = 'static'
+              for(var k in peers) {
+                send({type:'peers', peers: [{id, address, port, nat}]}, peers[k], port)
+              }
+            }
+          }
         }
 
         send({type: 'pong', id, addr, nat: node.data.nat}, addr, port)
@@ -100,6 +110,7 @@ module.exports = function (port, seeds, id) {
           var peer = peers[msg.id]
           if(msg.nat != peer.nat)
             peer.nat = msg.nat
+          announce = true
         }
         var port, matched = 0
         for(var k in pongs) {
@@ -139,7 +150,6 @@ module.exports = function (port, seeds, id) {
       //so they are therefore trusted (by this peer)
       //save peers, but don't trust them until we know they are real
       else if('peers' === msg.type) {
-    
         for(var i = 0; i < msg.peers.length; i++) {
           var peer = msg.peers[i] 
           if(isPeer(peer)) {
@@ -153,6 +163,9 @@ module.exports = function (port, seeds, id) {
                 ping(peer, port)
               }
               //if it's a easy nat, we could ping it and route a ping request via the node that told us about it
+            }
+            else if(peer.nat != 'unknown') {
+              peers[peer.id].nat = peer.nat
             }
           }
         }
