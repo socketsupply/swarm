@@ -44,6 +44,10 @@ except randomly resend things if you don't know many peers
 
 */
 
+function isNotHard (nat) {
+  return 'hard' != nat
+}
+
 function toPeer(p) {
   var {id, address, port, nat} = p
   return {id, address, port, nat}
@@ -71,6 +75,38 @@ module.exports = function (port, seeds, id) {
       send({type: 'ping', id}, addr, port)
     }
   
+    function update_peers (updates, sender) {
+      var changes = []
+      for(var i = 0; i < updates.length; i++) {
+        var peer = updates[i]
+        if(!peer) throw new Error('missing peer')
+        var _peer = peers[peer.id]
+        if(!_peer) {
+          peers[peer.id] = peer
+          changes.push(peer)
+          if((peer.id !== id) && isNotHard(peer.nat)) {
+            peer.send = Date.now()
+            ping(peer, port)
+          }
+      
+        }
+        else {
+          if(_peer.nat != peer.nat && peer.nat != 'unknown') {
+            _peer.nat = peer.nat
+            changes.push(toPeer(_peer))
+          }
+          else continue; //TODO handle peers that change ip (such as join another wifi)
+        }
+      }
+      //emit changes to all peers, except the sender (if provided)
+      if(changes.length) {
+        for(var k in peers) {
+          if(sender && sender.id != k)
+            send({peers: 'peers', peers: changes}, peers[k], port)
+        }
+      }
+    }
+
     //pings seeds
     //announce self
     //periodically emit peers
@@ -99,19 +135,10 @@ module.exports = function (port, seeds, id) {
         send({type: 'pong', id, addr, nat: node.data.nat}, addr, port)
       }
       else if('pong' === msg.type) {
-        var announce = false
         pongs[msg.id] = msg.addr
 
-        if(!peers[msg.id]) {
-          peers[msg.id] = {id: msg.id, ...addr, nat: msg.nat || 'unknown', direct: true, recv: Date.now()}
-          announce = true
-        }
-        else {
-          var peer = peers[msg.id]
-          if(msg.nat != peer.nat)
-            peer.nat = msg.nat
-          announce = true
-        }
+        var peer = {id: msg.id, ...addr, nat: msg.nat || 'unknown', direct: true, recv: Date.now()}
+        
         var port, matched = 0
         for(var k in pongs) {
           address = pongs[k].address
@@ -127,55 +154,30 @@ module.exports = function (port, seeds, id) {
 
         //if this peer is new to us, tell it about our other peers
         //also tell the other peers about it.
-        if(announce) {
-          //initialize peers list with our own address
-          var _peers = [{id, address, port, nat: node.data.nat}]
-          //announce this new peer to other peers
-          var peer = peers[msg.id]
-          for(var id2 in peers) {
-            var _peer = peers[id2]
-            if(id2 != msg.id) {
-              _peers.push(toPeer(_peer))
-              send({type:'peers', peers: [toPeer(peer)]}, _peer, port)
-            }
+        //initialize peers list with our own address
+        var _peers = [{id, address, port, nat: node.data.nat}]
+        //announce this new peer to other peers
+
+        update_peers([peer], peer, port)
+
+        for(var id2 in peers) {
+          var _peer = peers[id2]
+          if(id2 != msg.id) {
+            _peers.push(toPeer(_peer))
           }
-        
-          //send peers list to this new peer
-          if(_peers.length) {
-            send({type:'peers', peers: _peers}, peer, port)
-          }
+        }
+      
+        //send peers list to this new peer
+        if(_peers.length) {
+          send({type:'peers', peers: _peers}, peer, port)
         }
       }
       //announcements are verified to only be from direct peers.
       //so they are therefore trusted (by this peer)
       //save peers, but don't trust them until we know they are real
       else if('peers' === msg.type) {
-        for(var i = 0; i < msg.peers.length; i++) {
-          var peer = msg.peers[i] 
-          if(isPeer(peer)) {
-            if(!peers[peer.id]) {
-              peers[peer.id] = peer
-              //static peers can be directly pinged
-              //or peers which we have received this message from
-              //also send to easy nat peers because they might actually be static
-              if((peer.id !== id) && (/^(static|easy|unknown)$/.exec(peer.nat)) /*peer.nat === 'static' || peer.nat === 'easy' /*|| peer.address == addr.address*/) {
-                peer.send = Date.now()
-                ping(peer, port)
-              }
-              //if it's a easy nat, we could ping it and route a ping request via the node that told us about it
-            }
-            else if(peer.nat != 'unknown') {
-              peers[peer.id].nat = peer.nat
-            }
-          }
-        }
+        update_peers(msg.peers, addr, port)
       }
     }
   }
 }
-
-/*
-  start all peers connected to central node
-  then every peer requests peers
-  send 5 closest random peers and 5 random peers
-*/
