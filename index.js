@@ -53,12 +53,11 @@ function toPeer(p) {
   return {id, address, port, nat}
 }
 
-module.exports = function (port, seeds, id) {
+module.exports = function (port, seeds, id, nat = 'unknown') {
   if(!id) throw new Error('id must be provided')
   var peers = {}
   var pongs = {}
   var sent = {}
-  var nat = 'unknown'
   var address = null
   return function (send, timer, node) {
     node.data = {id, peers, pongs, nat, sent}
