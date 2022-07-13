@@ -47,8 +47,12 @@ tape('3 servers, 1 peer', function (t) {
 
   var peer_ids = [net.subnet[D].data.id, ...Object.keys(net.subnet[D].data.peers)].sort()
 
+  t.notOk(net.subnet[D].data.peers[net.subnet[D].data.id], 'self should not be in peers table')
+
+  console.log(net.subnet[D].data.peers)
+
   function peersOf(peer) {
-    return [peer.data.id, ...Object.keys(peer.data.pongs)].sort()
+    return [peer.data.id, ...Object.keys(peer.data.peers)].sort()
   }
 
   for(var k in net.subnet) {
@@ -109,7 +113,7 @@ function getNats (net) {
 
   return nats
 }
-
+return
 tape('3 servers, two seeds, similar to NAT check app', function (t) {
   for(var i = 0; i < 30; i++) {
     var net = new Network()
@@ -149,11 +153,15 @@ function newPeer (network, seed_count, salt='') {
       throw new Error('requested more than:'+id.length-8+' random ints from the same id')
     return Number.parseInt(id.substring(n, (n++)+8), 16) % m
   }
-  for(var i = 0; i < Math.min(rand_int(seed_count)+1, peers.length) ; i++) {
-    var p = peers[rand_int(peers.length)]
+  //randomly seed peers with the peers that were before them only.
+  //first peer will have no seeds.
+  //this gaurantees connected but acyclic network and no peers seeded with themselves
+  //resembles peers joining.
+  for(var i = 0; i < Math.min(rand_int(seed_count)+1, i) ; i++) {
+    var p = peers[rand_int(i)]
     seeds.push(p)
   }
-  if(seeds.length == 0) throw new Error('no seeds')
+
   network.add(addr, new Node(createPeer(100, seeds, id)))
   return network
 }
