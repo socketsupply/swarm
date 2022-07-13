@@ -38,4 +38,70 @@ function isPeer (p) {
     )
 }
 
-module.exports = {isIp, createId, isPort, isId, isNat, fromAddress, toAddress, isPeer}
+function nearest(ids, target, n) {
+  var found = [], max = 256
+  for(var i = 0; i < ids.length; i++)
+    if(ids[i])
+      for(var j = 0; j < ids[i].length; j++) {      
+        if(ids[i][j] === target)
+          return [target]
+        var dist = getPrefixLength(target, ids[i][j])
+        if(dist < max) {
+  //          max = dist
+          found.push(ids[i][j])
+          found.sort((a, b) => getPrefixLength(target, b) - getPrefixLength(target, a))
+          if(found.length > n)
+            found.pop() 
+        }
+      }
+  return found
+}
+
+function getPrefixLength (a,b) {
+  var match = 0
+  var i = 0
+  while(i < a.length && a[i] === b[i]) {
+      match += 4
+      i++
+  }
+  var _a = Number.parseInt(a[i], 16)
+  var _b = Number.parseInt(b[i], 16)
+  //check if the first 3 bits match.
+  //since we know the values are different,
+  //then they can't all match so we only need
+  //to check 3
+  if((_a & 8) === (_b & 8)) {
+    match ++
+    if((_a & 4) === (_b & 4)) {
+      match ++
+      if((_a & 2) === (_b & 2)) {
+        match ++
+      }
+    }
+  }
+  return match
+}
+
+function addPeer(table, id, peer_id, max = 3) {
+  var dist = getPrefixLength(id, peer_id)
+  var t = table[dist] = table[dist] || []
+  if(t.length < max) {
+    t.push(peer_id)
+    return t
+  }
+  return false
+}
+
+function removePeer (tabel, id, peer_id) {
+  var dist = getPrefixLength(id, peer_id)
+  var t = table[dist] = table[dist] || []
+  var i = t.indexOf(peer_id)
+  if(~i) {
+    t.splice(i, 1)
+    return true
+  }
+  return false
+}
+
+
+module.exports = {isIp, createId, isPort, isId, isNat, fromAddress, toAddress, isPeer, getPrefixLength, nearest, addPeer, removePeer}

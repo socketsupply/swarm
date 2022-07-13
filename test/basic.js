@@ -97,6 +97,19 @@ tape('3 servers, 1 peer', function (t) {
   t.end()
 })
 
+function getNats (net) {
+  var nats = {}
+
+  for(var k in net.subnet) {
+    for(var j in net.subnet[k].data.peers) {
+      var nat = net.subnet[k].data.peers[j].nat
+      nats[nat] = (nats[nat] || 0) + 1
+    }
+  }
+
+  return nats
+}
+
 tape('3 servers, two seeds, similar to NAT check app', function (t) {
   for(var i = 0; i < 30; i++) {
     var net = new Network()
@@ -108,23 +121,7 @@ tape('3 servers, two seeds, similar to NAT check app', function (t) {
 
     net.iterate(-1)
 
-    var nats = {}
-
-    for(var k in net.subnet) {
-      console.log(
-        short(net.subnet[k].data.id),
-        net.subnet[k].data.nat
-      )
-      for(var j in net.subnet[k].data.peers) {
-        var nat = net.subnet[k].data.peers[j].nat
-        nats[nat] = (nats[nat] || 0) + 1
-/*        console.log(
-          short(net.subnet[k].data.id), 
-          short(j),
-          net.subnet[k].data.peers[j].nat
-        )*/
-      }
-    }
+    var nats = getNats(net)
 
     t.ok(nats.static >= 9)
     if(nats.static === 12)
@@ -132,5 +129,40 @@ tape('3 servers, two seeds, similar to NAT check app', function (t) {
   }
 
   t.deepEqual(nats, {static:12})
+  t.end()
+})
+
+var peers = []
+
+function addrFromInt(i) {
+  return [1, 2, (i & 0xff00) >> 8, i & 0xff].join('.')
+}
+//generate a new peer, and give it some seeds of previously created peers gaurantees a connected network 
+function newPeer (network, seed_count, salt='') {
+  var addr = addrFromInt(peers.length) //[1, 2, (peers.length & 0xff00) >> 8, peers.length & 0xff].join('.')
+  var id = createId(addr+salt)
+  var seeds = []
+  peers.push(addr+P)
+  var n = 0
+  function rand_int (m) {
+    if(n > id.length - 8) //shouldn't need this many...
+      throw new Error('requested more than:'+id.length-8+' random ints from the same id')
+    return Number.parseInt(id.substring(n, (n++)+8), 16) % m
+  }
+  for(var i = 0; i < Math.min(rand_int(seed_count)+1, peers.length) ; i++) {
+    var p = peers[rand_int(peers.length)]
+    seeds.push(p)
+  }
+  if(seeds.length == 0) throw new Error('no seeds')
+  network.add(addr, new Node(createPeer(100, seeds, id)))
+  return network
+}
+
+tape('generate', function (t) {
+  var net = new Network()
+  for(var i = 0; i < 10; i++)
+    newPeer(net, 2)
+  net.iterate(-1)
+  console.log(getNats(net))
   t.end()
 })
