@@ -2,6 +2,10 @@
 
 var {isPeer, createId, toAddress, fromAddress} = require('./util')
 
+function assert(test, message) {
+  if(!test) throw new Error(message)
+}
+
 function isNotHard (nat) {
   return 'hard' != nat
 }
@@ -26,7 +30,6 @@ class PingPongPeers {
   }
   init (send, timer) {
     this.send = (msg, addr, port) => {
-      //console.log(msg, addr, port);
       this.count ++
       send(msg, addr, port)
     }
@@ -41,8 +44,9 @@ class PingPongPeers {
   ping (addr, port, id) {
     this.sent[addr.address] = this.sent[addr.address] || {}
     this.sent[addr.address][port] = Date.now()
+    assert(id !== this.id, 'must not ping self')
     if(id) {
-      this.peers[id] = {id, address: addr, port, nat: 'unknown', pinged: true, pong: null}
+      this.peers[id] = {id, ...addr, port, nat: addr.nat || 'unknown', pinged: true, pong: null}
     }
     this.send({type: 'ping', id: this.id}, addr, port)
   }
@@ -50,8 +54,8 @@ class PingPongPeers {
     //if we have received a ping from an address have not sent to,
     //we must have a static nat (publically addressable)
     //this would happen naturally, if a peer tells other peers about us and they ping
-    if(!msg.id) throw new Error('ping requires id')
-      
+    assert(msg.id, 'ping msg missing id')
+    assert(msg.id !== this.id, 'must not ping self')
     if(!this.peers[msg.id]) {
       //check that we really havn't sent anything to this peer (by ip:port)
       //that might open the firewall. If we never sent anything to them
@@ -77,9 +81,7 @@ class PingPongPeers {
   on_pong (msg, addr, port) {
 
 //    this.pongs[msg.id] = msg.addr
-    if(msg.id == this.id)
-      throw new Error('pinged self')
-
+    assert(msg.id !== this.id, "should not ping self")
     if(!this.peers[msg.id]) //only happns if seed
       this.peers[msg.id] = {id:msg.id, address: addr.address, port: addr.port, nat: msg.nat, pinged: true, recv: Date.now()}
 
@@ -92,16 +94,15 @@ class PingPongPeers {
     for(var k in this.peers) {
       var peer = this.peers[k]
       if(peer.pong) {
-        console.log(peer.pong)
         this.address = peer.pong.address
         if(!port) port = peer.pong.port
         else if(port != peer.pong.port && (peer.pong.nat === 'easy' || peer.pong.nat === 'static'))
-          this.nat = nat = 'hard'
+          this.nat = 'hard'
         else
           matched ++
       }
     }
-
+    console.log("NAT?", matched, this.nat)
     if(matched > 1 && this.nat !== 'static')
       this.nat = 'easy'
 
@@ -125,8 +126,6 @@ class PingPongPeers {
   
     //tell this new peer about all other peers
     if(_peers.length) {
-      console.log('peers', _peers)
-      _peers.forEach(p => { if(p.id == new_peer.id) throw new Error('oops: sending peer to itself')})
       this.send({type:'peers', peers: _peers}, new_peer, port)
     }
 
@@ -137,8 +136,7 @@ class PingPongPeers {
     var changes = []
     for(var i = 0; i < updates.length; i++) {
       var peer = updates[i]
-      if(!peer) throw new Error('missing peer')
-      if(peer.id === this.id) throw new Error('should not add self to peer table');
+      assert(peer, 'updated peer is defined')
       var _peer = this.peers[peer.id]
       if(!_peer) {
         this.peers[peer.id] = peer
@@ -146,7 +144,7 @@ class PingPongPeers {
         //we need to ping it ourselves before we tell our peers about it
         if((peer.id !== this.id) && isNotHard(peer.nat)) {
           peer.send = Date.now()
-          this.ping(peer, port)
+          this.ping(peer, port, peer.id)
         }
     
       }
@@ -162,7 +160,7 @@ class PingPongPeers {
     if(changes.length) {
       for(var k in this.peers) {
         if(sender && sender.id != k)
-          console.log('CH', changes)
+          //console.log('CH', changes)
           this.send({peers: 'peers', peers: changes}, this.peers[k], port)
       }
     }
@@ -176,7 +174,7 @@ class PingPongPeers {
 }
 
 module.exports = function (port, seeds, id, nat = 'unknown') {
-  if(!id) throw new Error('id must be provided')
+  assert(id, 'id must be provided')
   var ppp = new PingPongPeers({seeds, id, nat, port})
   return function (send, timer, node) {
     node.data = ppp//{id, peers, pongs, nat, sent}
