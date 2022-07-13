@@ -41,7 +41,7 @@ class PingPongPeers {
     this.sent[addr.address][port] = Date.now()
     this.send({type: 'ping', id: this.id}, addr, port)
   }
-  onping (msg, addr, port) {
+  on_ping (msg, addr, port) {
     //if we have received a ping from an address have not sent to,
     //we must have a static nat (publically addressable)
     //this would happen naturally, if a peer tells other peers about us and they ping
@@ -63,7 +63,7 @@ class PingPongPeers {
 
     this.send({type: 'pong', id:this.id, addr, nat: this.nat}, addr, port)
   }
-  onpong (msg, addr, port) {
+  on_pong (msg, addr, port) {
 
     this.pongs[msg.id] = msg.addr
 
@@ -140,7 +140,7 @@ class PingPongPeers {
 
   }
 
-  onpeers (msg, addr, port) {
+  on_peers (msg, addr, port) {
     this._update_peers(msg.peers, addr, port)
   }
 }
@@ -155,7 +155,7 @@ module.exports = function (port, seeds, id, nat = 'unknown') {
     //model this as a peer that changes it's ip address
     return (msg, addr, port) => {
       var fn
-      if(fn = ppp['on'+msg.type])
+      if(fn = ppp['on_'+msg.type])
           fn.call(ppp, msg, addr, port)
     }
   }
