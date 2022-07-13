@@ -22,10 +22,12 @@ class PingPongPeers {
     this.sent = {}
     this.address = null
     this.port = port
+    this.count = 0
   }
   init (send, timer) {
     this.send = (msg, addr, port) => {
       //console.log(msg, addr, port);
+      this.count ++
       send(msg, addr, port)
     }
     this.timer = timer
@@ -36,9 +38,12 @@ class PingPongPeers {
 
     return this
   }
-  ping (addr, port) {
+  ping (addr, port, id) {
     this.sent[addr.address] = this.sent[addr.address] || {}
     this.sent[addr.address][port] = Date.now()
+    if(id) {
+      this.peers[id] = {id, address: addr, port, nat: 'unknown', pinged: true, pong: null}
+    }
     this.send({type: 'ping', id: this.id}, addr, port)
   }
   on_ping (msg, addr, port) {
@@ -46,7 +51,13 @@ class PingPongPeers {
     //we must have a static nat (publically addressable)
     //this would happen naturally, if a peer tells other peers about us and they ping
     if(!msg.id) throw new Error('ping requires id')
-    if(!this.peers[msg.id]) { //TODO, double check that we have not sent anything to this peer yet
+      
+    if(!this.peers[msg.id]) {
+      //check that we really havn't sent anything to this peer (by ip:port)
+      //that might open the firewall. If we never sent anything to them
+      //it means we have an open (static) nat!
+      //(such as: we are vps server, or ports opened manually)
+      //(this could also be enabled with upnp
       if(!(this.sent[addr.address] && this.sent[addr.address][addr.port])) {
         //knowing that we are static depends on receiving a ping from an unknown peer
         //theirfore it depends on message order, which is unpredictable.
@@ -65,18 +76,30 @@ class PingPongPeers {
   }
   on_pong (msg, addr, port) {
 
-    this.pongs[msg.id] = msg.addr
+//    this.pongs[msg.id] = msg.addr
+    if(msg.id == this.id)
+      throw new Error('pinged self')
 
-    var peer = {id: msg.id, ...addr, nat: msg.nat || 'unknown', direct: true, recv: Date.now()}
+    if(!this.peers[msg.id]) //only happns if seed
+      this.peers[msg.id] = {id:msg.id, address: addr.address, port: addr.port, nat: msg.nat, pinged: true, recv: Date.now()}
+
+    this.peers[msg.id].pong
+      = {ts: Date.now(), ...msg.addr}
+    //var peer = {id: msg.id, ...addr, nat: msg.nat || 'unknown', direct: true, recv: Date.now()}
+    var new_peer = this.peers[msg.id]
     
     var port, matched = 0
-    for(var k in this.pongs) {
-      this.address = this.pongs[k].address
-      if(!port) port = this.pongs[k].port
-      else if(port != this.pongs[k].port && (this.pong[k].nat === 'easy' || this.pong[k].nat === 'static'))
-        this.nat = nat = 'hard'
-      else
-        matched ++
+    for(var k in this.peers) {
+      var peer = this.peers[k]
+      if(peer.pong) {
+        console.log(peer.pong)
+        this.address = peer.pong.address
+        if(!port) port = peer.pong.port
+        else if(port != peer.pong.port && (peer.pong.nat === 'easy' || peer.pong.nat === 'static'))
+          this.nat = nat = 'hard'
+        else
+          matched ++
+      }
     }
 
     if(matched > 1 && this.nat !== 'static')
@@ -88,18 +111,23 @@ class PingPongPeers {
     var _peers = [toPeer(this)]
     //announce this new peer to other peers
 
-    this._update_peers([peer], peer, port)
+    //XXX hang on, update the peer but don't ping it again
+//    this._update_peers([peer], peer, port)
 
+    //tell all peers about our new peer
     for(var id2 in this.peers) {
       var _peer = this.peers[id2]
-      if(id2 != msg.id) {
+      if(_peer.id !== new_peer.id && _peer.pong) {
         _peers.push(toPeer(_peer))
+        this.send({type:'peers', peers: [toPeer(new_peer)]}, _peer, port)
       }
     }
   
-    //send peers list to this new peer
+    //tell this new peer about all other peers
     if(_peers.length) {
-      this.send({type:'peers', peers: _peers}, peer, port)
+      console.log('peers', _peers)
+      _peers.forEach(p => { if(p.id == new_peer.id) throw new Error('oops: sending peer to itself')})
+      this.send({type:'peers', peers: _peers}, new_peer, port)
     }
 
   }
@@ -110,6 +138,7 @@ class PingPongPeers {
     for(var i = 0; i < updates.length; i++) {
       var peer = updates[i]
       if(!peer) throw new Error('missing peer')
+      if(peer.id === this.id) throw new Error('should not add self to peer table');
       var _peer = this.peers[peer.id]
       if(!_peer) {
         this.peers[peer.id] = peer
@@ -133,14 +162,15 @@ class PingPongPeers {
     if(changes.length) {
       for(var k in this.peers) {
         if(sender && sender.id != k)
+          console.log('CH', changes)
           this.send({peers: 'peers', peers: changes}, this.peers[k], port)
       }
     }
 
-
   }
 
   on_peers (msg, addr, port) {
+    //ping any new peers
     this._update_peers(msg.peers, addr, port)
   }
 }
