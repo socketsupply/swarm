@@ -140,14 +140,16 @@ class PingPongPeers {
       assert(peer, 'updated peer is defined')
       var _peer = this.peers[peer.id]
       if(!_peer) {
-        this.peers[peer.id] = peer
-        //do not add the new peer to changes
-        //we need to ping it ourselves before we tell our peers about it
-        if((peer.id !== this.id) && isNotHard(peer.nat)) {
-          peer.send = Date.now()
-          this.ping(peer, port, peer.id)
+        if(!this._peer_filter || this._peer_filter(peer.id)) {
+          //XXX NEW PEER
+          this.peers[peer.id] = peer
+          //do not add the new peer to changes
+          //we need to ping it ourselves before we tell our peers about it
+          if((peer.id !== this.id) && isNotHard(peer.nat)) {
+            peer.send = Date.now()
+            this.ping(peer, port, peer.id)
+          }
         }
-    
       }
       else {
         if(_peer.nat != peer.nat && peer.nat != 'unknown') {
