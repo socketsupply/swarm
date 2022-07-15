@@ -102,7 +102,6 @@ class PingPongPeers {
           matched ++
       }
     }
-    console.log("NAT?", matched, this.nat)
     if(matched > 1 && this.nat !== 'static')
       this.nat = 'easy'
 
@@ -113,7 +112,6 @@ class PingPongPeers {
     //announce this new peer to other peers
 
     //XXX hang on, update the peer but don't ping it again
-//    this._update_peers([peer], peer, port)
 
     //tell all peers about our new peer
     for(var id2 in this.peers) {
@@ -131,7 +129,10 @@ class PingPongPeers {
 
   }
 
-  _update_peers (updates, sender, port) {
+  on_peers (msg, addr, port) {
+    //ping any new peers
+    var updates = msg.peers
+    var sender = addr
 
     var changes = []
     for(var i = 0; i < updates.length; i++) {
@@ -160,16 +161,10 @@ class PingPongPeers {
     if(changes.length) {
       for(var k in this.peers) {
         if(sender && sender.id != k)
-          //console.log('CH', changes)
           this.send({peers: 'peers', peers: changes}, this.peers[k], port)
       }
     }
 
-  }
-
-  on_peers (msg, addr, port) {
-    //ping any new peers
-    this._update_peers(msg.peers, addr, port)
   }
 }
 
