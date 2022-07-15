@@ -170,6 +170,33 @@ class PingPongPeers {
   }
 }
 
+class DHTPeer extends PingPoingPeer {
+  constructor (opts) {
+    super(opts)
+    this.table = []
+  }
+  //this makes it into a DHT
+  _peer_filter (id) {
+    return util.addPeer(this.table, this.id, id, 3)
+  }
+  on_route (msg, addr, port) {
+    if(msg.target == this.id) { //the message is for us!
+      //but what to do with the messages???
+    } else (this.peers[msg.target]) { //we know exact peer
+      msg.hops = msg.hops + 1
+      send(msg, this.peers[id], port)
+    } else {
+      var _id = util.nearest(this.table, msg.id, 1)
+      msg.hops = msg.hops + 1
+      send(msg, this.peers[id], port)
+    }
+  }
+  route_msg (msg, addr, port) {
+    
+
+  }
+}
+
 module.exports = function (port, seeds, id, nat = 'unknown') {
   assert(id, 'id must be provided')
   var ppp = new PingPongPeers({seeds, id, nat, port})
