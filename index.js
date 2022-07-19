@@ -1,6 +1,6 @@
 
 
-var {isPeer, createId, toAddress, fromAddress} = require('./util')
+var {isPeer, createId, toAddress, fromAddress, addPeer, nearest} = require('./util')
 
 function assert(test, message) {
   if(!test) throw new Error(message)
@@ -176,7 +176,7 @@ class DHTPeer extends PingPongPeers {
   }
   //this makes it into a DHT, because it has a ceiling on the number of peers it keeps
   _peer_filter (id) {
-    return util.addPeer(this.table, this.id, id, 3)
+    return addPeer(this.table, this.id, id, 3)
   }
   //in the bit torrent DHT, client peer requests peers nearer a key,
   //then queries them. that means client peer is in control,
@@ -190,20 +190,19 @@ class DHTPeer extends PingPongPeers {
 
     } else if (this.peers[msg.target]) { //we know exact peer
       msg.hops = msg.hops + 1
-      send(msg, this.peers[id], port)
+      this.send(msg, this.peers[id], port)
     } else {
-      var _id = util.nearest(this.table, msg.id, 1)
+      var _id = nearest(this.table, msg.id, 1)
       msg.hops = msg.hops + 1
-      send(msg, this.peers[id], port)
+      this.send(msg, this.peers[id], port)
     }
   }
-  route_msg (msg, addr, port) {
+  route_msg (msg, id_addr, port) {
     //{target: id, hops: count, msg: content}
-    var ids = util.nearest(this.table, msg.target, 3)
+    var ids = nearest(this.table, id_addr.id, 3)
     if(ids.length) {
       var peer = this.peers[ids[0]]
-      msg.hops = (msg.hops | 0) + 1
-      send(msg, peer, port)
+      this.send({type: 'route', target: id_addr.id, msg: msg, hops: 1}, peer, port)
     }
     else
       console.error('no peers, drop route packet')
@@ -212,7 +211,7 @@ class DHTPeer extends PingPongPeers {
 
 module.exports = function (port, seeds, id, nat = 'unknown') {
   assert(id, 'id must be provided')
-  var ppp = new PingPongPeers({seeds, id, nat, port})
+  var ppp = new DHTPeer({seeds, id, nat, port})
   return function (send, timer, node) {
     node.data = ppp//{id, peers, pongs, nat, sent}
     ppp.init(send, timer)
