@@ -166,23 +166,29 @@ class PingPongPeers {
           this.send({peers: 'peers', peers: changes}, this.peers[k], port)
       }
     }
-
   }
 }
 
-class DHTPeer extends PingPoingPeer {
+class DHTPeer extends PingPongPeers {
   constructor (opts) {
     super(opts)
     this.table = []
   }
-  //this makes it into a DHT
+  //this makes it into a DHT, because it has a ceiling on the number of peers it keeps
   _peer_filter (id) {
     return util.addPeer(this.table, this.id, id, 3)
   }
+  //in the bit torrent DHT, client peer requests peers nearer a key,
+  //then queries them. that means client peer is in control,
+  //but it also means more network trips and more bytes sent
   on_route (msg, addr, port) {
     if(msg.target == this.id) { //the message is for us!
       //but what to do with the messages???
-    } else (this.peers[msg.target]) { //we know exact peer
+      var _msg = msg.msg, fn
+      if(fn = this['on_'+_msg.type])
+          fn.call(this, _msg, addr, port)
+
+    } else if (this.peers[msg.target]) { //we know exact peer
       msg.hops = msg.hops + 1
       send(msg, this.peers[id], port)
     } else {
@@ -192,8 +198,15 @@ class DHTPeer extends PingPoingPeer {
     }
   }
   route_msg (msg, addr, port) {
-    
-
+    //{target: id, hops: count, msg: content}
+    var ids = util.nearest(this.table, msg.target, 3)
+    if(ids.length) {
+      var peer = this.peers[ids[0]]
+      msg.hops = (msg.hops | 0) + 1
+      send(msg, peer, port)
+    }
+    else
+      console.error('no peers, drop route packet')
   }
 }
 
