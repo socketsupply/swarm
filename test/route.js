@@ -77,5 +77,15 @@ tape('generate', function (t) {
   net.iterate(-1)
 //  console.log(net)
   console.log(getNats(net))
+  console.log(peers)
+  //can we send a message to another peer
+
+  net.subnet['1.2.0.0'].data.route_msg({
+    type: 'hello',
+    id: net.subnet['1.2.0.0'].data.id
+  }, {id: net.subnet['1.2.0.9'].data.id}, 100)
+  net.iterate(-1)
+
+
   t.end()
 })
